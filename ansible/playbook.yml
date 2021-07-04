@@ -1,0 +1,92 @@
+---
+- name: Configure Terraform host - Ubuntu
+  hosts: tfHosts
+  vars_files:
+    - ./external_vars.yml
+  tasks:
+
+# -----------------------------------------------------------------------------
+# General tasks
+# -----------------------------------------------------------------------------
+    - name: Create a test file
+      ansible.builtin.copy:
+        content: "A test file - asdf\n"
+        dest: /home/ubuntu/testFile
+        force: no
+        mode: u=rw,g=r,o=r
+
+    - name: Update package list
+      become: true
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: 86400 # One day
+
+    - name: Upgrade distribution
+      become: true
+      ansible.builtin.apt:
+        upgrade: "dist"
+        autoremove: yes
+
+    - name: Install apt packages
+      become: true
+      ansible.builtin.apt:
+        state: latest
+        name: 
+          - git
+          - tmux
+          - screen
+          - net-tools
+
+# -----------------------------------------------------------------------------
+# Install tailscale
+# -----------------------------------------------------------------------------
+    - name: Install tailscale - add repository keys
+      become: true
+      ansible.builtin.apt_key:
+        url: https://pkgs.tailscale.com/stable/ubuntu/focal.gpg
+        state: present
+
+    - name: Install tailscale - update sources list
+      become: true
+      ansible.builtin.get_url:
+        url: https://pkgs.tailscale.com/stable/ubuntu/focal.list
+        dest: /etc/apt/sources.list.d/tailscale.list
+
+    - name: Install tailscale - apt update and install tailscale
+      become: true
+      ansible.builtin.apt:
+        update_cache: yes
+        state: latest
+        name: 
+          - tailscale
+
+    # - name: Install tailscale - enable ipv4 forwarding
+    #   become: true
+    #   ansible.posix.sysctl:
+    #     name: net.ipv4.ip_forward
+    #     value: '1'
+    #     sysctl_set: yes
+    #     state: present
+    #     reload: yes
+
+    # - name: Install tailscale - enable ipv6 forwarding
+    #   become: true
+    #   ansible.posix.sysctl:
+    #     name: net.ipv6.conf.all.forwarding
+    #     value: '1'
+    #     sysctl_set: yes
+    #     state: present
+    #     reload: yes
+
+    # If ts_key is provided then start the service, otherwise this has to be 
+    # done manually
+    - name: Install tailscale - start service
+      become: true
+      ansible.builtin.command:
+        cmd: tailscale up --authkey={{ ts_key }}
+      when: (ts_key is defined) and (ts_key|length > 0)
+
+    - name: Install tailscale - start service
+      ansible.builtin.debug:
+        msg: "Start tailscale manually as auth key was not specified."
+      when: (ts_key is not defined) or (ts_key|length == 0)
